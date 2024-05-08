@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+
+
 # ==============================================================================
 # -- find carla module ---------------------------------------------------------
 # ==============================================================================
@@ -10,25 +12,13 @@ import os
 import sys
 
 try:
-    sys.path.append('/home/melodic/examples/')
+    sys.path.append(glob.glob(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + '/carla/dist/carla-*%d.%d-%s.egg' % (
+        sys.version_info.major,
+        sys.version_info.minor,
+        'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
 except IndexError:
     pass
 
-from csv_coordinate.repository.CsvCoordinateRepositoryImpl import CsvCoordinateRepositoryImpl
-import time
-import csv
-
-# from reportlab.lib.colors import cyan, red, green, white, orange
-
-
-try:
-    sys.path.append(
-        glob.glob(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + '/carla/dist/carla-*%d.%d-%s.egg' % (
-            sys.version_info.major,
-            sys.version_info.minor,
-            'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
-except IndexError:
-    pass
 
 # ==============================================================================
 # -- imports -------------------------------------------------------------------
@@ -38,11 +28,12 @@ except IndexError:
 import carla
 
 from carla import ColorConverter as cc
-# import PythonAPI
-# import PythonAPI.util
+from PythonAPI.types_behavior import BehaviorType
 
-# from carla import draw_waypoint_union, draw_transform
-# from lane_explorer import draw_waypoint_union, draw_transform, cyan, red, green, white, orange
+
+import PythonAPI
+
+
 import argparse
 import collections
 import datetime
@@ -78,7 +69,6 @@ try:
     from pygame.locals import K_g
     from pygame.locals import K_h
     from pygame.locals import K_i
-    from pygame.locals import K_u
     from pygame.locals import K_l
     from pygame.locals import K_m
     from pygame.locals import K_n
@@ -102,91 +92,13 @@ try:
 except ImportError:
     raise RuntimeError('cannot import numpy, make sure numpy package is installed')
 
-red = carla.Color(255, 0, 0)
-green = carla.Color(0, 255, 0)
-blue = carla.Color(47, 210, 231)
-cyan = carla.Color(0, 255, 255)
-yellow = carla.Color(255, 255, 0)
-orange = carla.Color(255, 162, 0)
-white = carla.Color(255, 255, 255)
 
-trail_life_time = 10
-waypoint_separation = 10
 
-way_point = None
-way_point_data = []
 
 
 # ==============================================================================
 # -- Global functions ----------------------------------------------------------
 # ==============================================================================
-
-
-def toggle_waypoint():
-    global way_point
-    if not way_point:
-        print("\033[91mStart Recording WayPoint\033[0m", end="\n")
-        csv_repo = CsvCoordinateRepositoryImpl.getInstance()
-        csv_repo.count_work_id()
-        way_point = True
-    else:
-        print("\033[91mFinish recording WayPoint\033[0m", end="\n")
-        print("way_point_data: ", way_point_data, end="\n")
-        way_point = False
-
-def draw_transform(debug, trans, col=carla.Color(255, 0, 0), lt=-1):
-    debug.draw_arrow(
-        trans.location, trans.location + trans.get_forward_vector(),
-        thickness=0.05, arrow_size=0.1, color=col, life_time=lt)
-
-
-def draw_waypoint_union(debug, w0, w1, color=carla.Color(255, 0, 0), lt=5):
-    debug.draw_line(
-        w0.transform.location + carla.Location(z=0.25),
-        w1.transform.location + carla.Location(z=0.25),
-        thickness=0.1, color=color, life_time=lt, persistent_lines=False)
-    debug.draw_point(w1.transform.location + carla.Location(z=0.25), 0.1, color, lt, False)
-
-
-def draw_waypoint_info(debug, w, lt=5):
-    w_loc = w.transform.location
-    debug.draw_string(w_loc + carla.Location(z=0.5), "lane: " + str(w.lane_id), False, yellow, lt)
-    debug.draw_string(w_loc + carla.Location(z=1.0), "road: " + str(w.road_id), False, blue, lt)
-    debug.draw_string(w_loc + carla.Location(z=-.5), str(w.lane_change), False, red, lt)
-
-
-def draw_junction(debug, junction, l_time=10):
-    """Draws a junction bounding box and the initial and final waypoint of every lane."""
-    # draw bounding box
-    box = junction.bounding_box
-    point1 = box.location + carla.Location(x=box.extent.x, y=box.extent.y, z=2)
-    point2 = box.location + carla.Location(x=-box.extent.x, y=box.extent.y, z=2)
-    point3 = box.location + carla.Location(x=-box.extent.x, y=-box.extent.y, z=2)
-    point4 = box.location + carla.Location(x=box.extent.x, y=-box.extent.y, z=2)
-    debug.draw_line(
-        point1, point2,
-        thickness=0.1, color=orange, life_time=l_time, persistent_lines=False)
-    debug.draw_line(
-        point2, point3,
-        thickness=0.1, color=orange, life_time=l_time, persistent_lines=False)
-    debug.draw_line(
-        point3, point4,
-        thickness=0.1, color=orange, life_time=l_time, persistent_lines=False)
-    debug.draw_line(
-        point4, point1,
-        thickness=0.1, color=orange, life_time=l_time, persistent_lines=False)
-    # draw junction pairs (begin-end) of every lane
-    junction_w = junction.get_waypoints(carla.LaneType.Any)
-    for pair_w in junction_w:
-        draw_transform(debug, pair_w[0].transform, orange, l_time)
-        debug.draw_point(
-            pair_w[0].transform.location + carla.Location(z=0.75), 0.1, orange, l_time, False)
-        draw_transform(debug, pair_w[1].transform, orange, l_time)
-        debug.draw_point(
-            pair_w[1].transform.location + carla.Location(z=0.75), 0.1, orange, l_time, False)
-        debug.draw_line(
-            pair_w[0].transform.location + carla.Location(z=0.75),
-            pair_w[1].transform.location + carla.Location(z=0.75), 0.1, white, l_time, False)
 
 
 def find_weather_presets():
@@ -209,7 +121,6 @@ def get_actor_display_name(actor, truncate=250):
 class World(object):
     def __init__(self, carla_world, hud, args):
         self.world = carla_world
-        self.debug = carla.DebugHelper
         self.actor_role_name = args.rolename
         try:
             self.map = self.world.get_map()
@@ -221,7 +132,6 @@ class World(object):
         self.hud = hud
         self.player = None
         self.collision_sensor = None
-        self.obstacle_sensor = None
         self.lane_invasion_sensor = None
         self.gnss_sensor = None
         self.imu_sensor = None
@@ -258,13 +168,8 @@ class World(object):
         cam_index = self.camera_manager.index if self.camera_manager is not None else 0
         cam_pos_index = self.camera_manager.transform_index if self.camera_manager is not None else 0
         # Get a random blueprint.
-
-        vehicle_blueprints = self.world.get_blueprint_library().filter('vehicle.carlamotors.carlacola')
-
-        blueprint = vehicle_blueprints[0]
-
-        # blueprint = random.choice(self.world.get_blueprint_library().filter(self._actor_filter))
-        # blueprint.set_attribute('role_name', self.actor_role_name)
+        blueprint = random.choice(self.world.get_blueprint_library().filter(self._actor_filter))
+        blueprint.set_attribute('role_name', self.actor_role_name)
         if blueprint.has_attribute('color'):
             color = random.choice(blueprint.get_attribute('color').recommended_values)
             blueprint.set_attribute('color', color)
@@ -286,22 +191,17 @@ class World(object):
             spawn_point.rotation.roll = 0.0
             spawn_point.rotation.pitch = 0.0
             self.destroy()
-            spawn_points = self.map.get_spawn_points()
-            spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
         while self.player is None:
             if not self.map.get_spawn_points():
                 print('There are no spawn points available in your map/town.')
                 print('Please add some Vehicle Spawn Point to your UE4 scene.')
                 sys.exit(1)
-
             spawn_points = self.map.get_spawn_points()
             spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
-
         # Set up the sensors.
         self.collision_sensor = CollisionSensor(self.player, self.hud)
-        self.obstacle_sensor = LineOfSightSensor(self.player, self.hud)
         self.lane_invasion_sensor = LaneInvasionSensor(self.player, self.hud)
         self.gnss_sensor = GnssSensor(self.player)
         self.imu_sensor = IMUSensor(self.player)
@@ -358,7 +258,6 @@ class World(object):
         sensors = [
             self.camera_manager.sensor,
             self.collision_sensor.sensor,
-            self.obstacle_sensor.sensor,
             self.lane_invasion_sensor.sensor,
             self.gnss_sensor.sensor,
             self.imu_sensor.sensor]
@@ -369,6 +268,49 @@ class World(object):
         if self.player is not None:
             self.player.destroy()
 
+# ==============================================================================
+# -- Behavior Classes ----------------------------------------------------------
+# ==============================================================================
+
+class Cautious(object):
+    """Class for Cautious agent."""
+    max_speed = 5
+    speed_lim_dist = 6
+    speed_decrease = 12
+    safety_time = 3
+    min_proximity_threshold = 12
+    braking_distance = 6
+    overtake_counter = -1
+    tailgate_counter = 0
+    # Cautious 행동 유형을 추가합니다.
+    behavior_type = BehaviorType.CAUTIOUS
+
+class Normal(object):
+    """Class for Normal agent."""
+    max_speed = 50
+    speed_lim_dist = 3
+    speed_decrease = 10
+    safety_time = 3
+    min_proximity_threshold = 10
+    braking_distance = 5
+    overtake_counter = 0
+    tailgate_counter = 0
+    # Normal 행동 유형을 추가합니다.
+    behavior_type = BehaviorType.NORMAL
+
+class Aggressive(object):
+    """Class for Aggressive agent."""
+    max_speed = 70
+    speed_lim_dist = 1
+    speed_decrease = 8
+    safety_time = 3
+    min_proximity_threshold = 8
+    braking_distance = 4
+    overtake_counter = 0
+    tailgate_counter = -1
+    # Aggressive 행동 유형을 추가합니다.
+    behavior_type = BehaviorType.AGGRESSIVE
+
 
 # ==============================================================================
 # -- KeyboardControl -----------------------------------------------------------
@@ -377,7 +319,6 @@ class World(object):
 
 class KeyboardControl(object):
     """Class that handles keyboard input."""
-
     def __init__(self, world, start_in_autopilot):
         self._carsim_enabled = False
         self._carsim_road = False
@@ -437,17 +378,14 @@ class KeyboardControl(object):
                 elif event.key == K_n:
                     world.camera_manager.next_sensor()
                 elif event.key == K_w and (pygame.key.get_mods() & KMOD_CTRL):
-                    print(world.constant_velocity_enabled)
                     if world.constant_velocity_enabled:
                         world.player.disable_constant_velocity()
                         world.constant_velocity_enabled = False
                         world.hud.notification("Disabled Constant Velocity Mode")
-                        print('60 off!!')
                     else:
-                        world.player.enable_constant_velocity(carla.Vector3D(1.4, 0, 0))
+                        world.player.enable_constant_velocity(carla.Vector3D(17, 0, 0))
                         world.constant_velocity_enabled = True
                         world.hud.notification("Enabled Constant Velocity Mode at 60 km/h")
-                        print('60 on!!')
                 elif event.key > K_0 and event.key <= K_9:
                     world.camera_manager.set_sensor(event.key - 1 - K_0)
                 elif event.key == K_r and not (pygame.key.get_mods() & KMOD_CTRL):
@@ -482,33 +420,10 @@ class KeyboardControl(object):
                     self._carsim_road = not self._carsim_road
                     world.player.use_carsim_road(self._carsim_road)
                     print("j pressed, using carsim road =", self._carsim_road)
-
-                elif event.key == K_i:
-                    print("i pressed")
-                    toggle_waypoint()
                 # elif event.key == K_i and (pygame.key.get_mods() & KMOD_CTRL):
                 #     print("i pressed")
                 #     imp = carla.Location(z=50000)
                 #     world.player.add_impulse(imp)
-                elif event.key == K_u:
-                    print("u pressed")
-                    if way_point_data:
-                        print("\033[91mSaved Recording WayPoint\033[0m", end="\n")
-                        csv_repo = CsvCoordinateRepositoryImpl.getInstance()
-                        for point in way_point_data:
-                            print("point[0]:", point[0])
-                            print("point[1]:", point[1])
-                            print("point[2]:", point[2])
-                            print("point[3]:", point[3])
-                            print("point[4]:", point[4])
-                            print("point[5]:", point[5])
-                            csv_repo.saveCoordinateInCsv(point[0], point[1], point[2], point[3], point[4],point[5])
-
-                        way_point_data[:] = []
-
-                    else:
-                        print("\033[91mError: Empty Way point Data\033[0m", end="\n")
-
                 elif event.key == K_MINUS and (pygame.key.get_mods() & KMOD_CTRL):
                     if pygame.key.get_mods() & KMOD_SHIFT:
                         world.recording_start -= 10
@@ -538,10 +453,6 @@ class KeyboardControl(object):
                         world.player.set_autopilot(self._autopilot_enabled)
                         world.hud.notification(
                             'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
-
-                        # tm = client.get_trafficmanager(8000)
-                        # tm.vehicle_percentage_speed_difference(world.player, 85.0)
-                        # print(tm)
                     elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
                         current_lights ^= carla.VehicleLightState.Special1
                     elif event.key == K_l and pygame.key.get_mods() & KMOD_SHIFT:
@@ -577,13 +488,13 @@ class KeyboardControl(object):
                 # Set automatic control-related vehicle lights
                 if self._control.brake:
                     current_lights |= carla.VehicleLightState.Brake
-                else:  # Remove the Brake flag
+                else: # Remove the Brake flag
                     current_lights &= ~carla.VehicleLightState.Brake
                 if self._control.reverse:
                     current_lights |= carla.VehicleLightState.Reverse
-                else:  # Remove the Reverse flag
+                else: # Remove the Reverse flag
                     current_lights &= ~carla.VehicleLightState.Reverse
-                if current_lights != self._lights:  # Change the light state only if necessary
+                if current_lights != self._lights: # Change the light state only if necessary
                     self._lights = current_lights
                     world.player.set_light_state(carla.VehicleLightState(self._lights))
             elif isinstance(self._control, carla.WalkerControl):
@@ -694,7 +605,7 @@ class HUD(object):
             'Map:     % 20s' % world.map.name.split('/')[-1],
             'Simulation time: % 12s' % datetime.timedelta(seconds=int(self.simulation_time)),
             '',
-            'Speed:   % 15.0f km/h' % (3.6 * math.sqrt(v.x ** 2 + v.y ** 2 + v.z ** 2)),
+            'Speed:   % 15.0f km/h' % (3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)),
             u'Compass:% 17.0f\N{DEGREE SIGN} % 2s' % (compass, heading),
             'Accelero: (%5.1f,%5.1f,%5.1f)' % (world.imu_sensor.accelerometer),
             'Gyroscop: (%5.1f,%5.1f,%5.1f)' % (world.imu_sensor.gyroscope),
@@ -723,8 +634,7 @@ class HUD(object):
             'Number of vehicles: % 8d' % len(vehicles)]
         if len(vehicles) > 1:
             self._info_text += ['Nearby vehicles:']
-            distance = lambda l: math.sqrt(
-                (l.x - t.location.x) ** 2 + (l.y - t.location.y) ** 2 + (l.z - t.location.z) ** 2)
+            distance = lambda l: math.sqrt((l.x - t.location.x)**2 + (l.y - t.location.y)**2 + (l.z - t.location.z)**2)
             vehicles = [(distance(x.get_location()), x) for x in vehicles if x.id != world.player.id]
             for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
                 if d > 200.0:
@@ -816,7 +726,6 @@ class FadingText(object):
 
 class HelpText(object):
     """Helper class to handle text output using pygame"""
-
     def __init__(self, font, width, height):
         lines = __doc__.split('\n')
         self.font = font
@@ -841,7 +750,7 @@ class HelpText(object):
 
 
 # ==============================================================================
-# -- Sensor -----------------------------------------------------------
+# -- CollisionSensor -----------------------------------------------------------
 # ==============================================================================
 
 
@@ -873,61 +782,10 @@ class CollisionSensor(object):
         actor_type = get_actor_display_name(event.other_actor)
         self.hud.notification('Collision with %r' % actor_type)
         impulse = event.normal_impulse
-        intensity = math.sqrt(impulse.x ** 2 + impulse.y ** 2 + impulse.z ** 2)
+        intensity = math.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
         self.history.append((event.frame, intensity))
         if len(self.history) > 4000:
             self.history.pop(0)
-
-
-class LineOfSightSensor(object):
-    def __init__(self, parent_actor, hud):
-        self.sensor = None
-        self._history = []
-        self._parent = parent_actor
-        self._hud = hud
-        self._event_count = 0
-        self.sensor_transform = carla.Transform(carla.Location(x=1.6, z=1.7),
-                                                carla.Rotation(yaw=0))  # Put this sensor on the windshield of the car.
-        world = self._parent.get_world()
-        bp = world.get_blueprint_library().find('sensor.other.obstacle')
-        bp.set_attribute('distance', '200')
-        bp.set_attribute('hit_radius', '12')
-        bp.set_attribute('only_dynamics', 'true')
-        # bp.set_attribute('debug_linetrace', 'true')
-        bp.set_attribute('sensor_tick', '0.5')
-        self.sensor = world.spawn_actor(bp, self.sensor_transform, attach_to=self._parent)
-        weak_self = weakref.ref(self)
-        self.sensor.listen(lambda event: LineOfSightSensor._on_LOS(weak_self, event))
-
-    @staticmethod
-    def _on_LOS(weak_self, event, some_condition=None):
-        self = weak_self()
-        if not self:
-            return
-        print(str(event.other_actor))
-        if event.other_actor.type_id.startswith('vehicle.') or event.other_actor.type_id.startswith('walker.'):
-            print("Event %s, in line of sight with %s at distance %u" % (
-            self._event_count, event.other_actor.type_id, event.distance))
-            self._event_count += 1
-
-            if event.other_actor.is_alive:
-                try:
-                    if some_condition:
-                        event.other_actor.destroy()
-                except RuntimeError as e:
-                    print("Error deleting actor: {}".format(e))
-            else:
-                print("Actor is already destroyed or in the process of being destroyed.")
-
-    def update(self, delta_seconds, event, actors_to_delete=None):
-        self._on_LOS(event)
-
-        for actor in actors_to_delete:
-            if actor.is_alive:
-                try:
-                    actor.destroy()
-                except RuntimeError as e:
-                    print("Error deleting actor: {}".format(e))
 
 
 # ==============================================================================
@@ -1034,7 +892,7 @@ class RadarSensor(object):
     def __init__(self, parent_actor):
         self.sensor = None
         self._parent = parent_actor
-        self.velocity_range = 7.5  # m/s
+        self.velocity_range = 7.5 # m/s
         world = self._parent.get_world()
         self.debug = world.debug
         bp = world.get_blueprint_library().find('sensor.other.radar')
@@ -1077,7 +935,7 @@ class RadarSensor(object):
             def clamp(min_v, max_v, value):
                 return max(min_v, min(value, max_v))
 
-            norm_velocity = detect.velocity / self.velocity_range  # range [-1, 1]
+            norm_velocity = detect.velocity / self.velocity_range # range [-1, 1]
             r = int(clamp(0.0, 1.0, 1.0 - norm_velocity) * 255.0)
             g = int(clamp(0.0, 1.0, 1.0 - abs(norm_velocity)) * 255.0)
             b = int(abs(clamp(- 1.0, 0.0, - 1.0 - norm_velocity)) * 255.0)
@@ -1087,7 +945,6 @@ class RadarSensor(object):
                 life_time=0.06,
                 persistent_lines=False,
                 color=carla.Color(r, g, b))
-
 
 # ==============================================================================
 # -- CameraManager -------------------------------------------------------------
@@ -1117,14 +974,14 @@ class CameraManager(object):
             ['sensor.camera.depth', cc.LogarithmicDepth, 'Camera Depth (Logarithmic Gray Scale)', {}],
             ['sensor.camera.semantic_segmentation', cc.Raw, 'Camera Semantic Segmentation (Raw)', {}],
             ['sensor.camera.semantic_segmentation', cc.CityScapesPalette,
-             'Camera Semantic Segmentation (CityScapes Palette)', {}],
+                'Camera Semantic Segmentation (CityScapes Palette)', {}],
             ['sensor.lidar.ray_cast', None, 'Lidar (Ray-Cast)', {'range': '50'}],
             ['sensor.camera.dvs', cc.Raw, 'Dynamic Vision Sensor', {}],
             ['sensor.camera.rgb', cc.Raw, 'Camera RGB Distorted',
-             {'lens_circle_multiplier': '3.0',
-              'lens_circle_falloff': '3.0',
-              'chromatic_aberration_intensity': '0.5',
-              'chromatic_aberration_offset': '0'}]]
+                {'lens_circle_multiplier': '3.0',
+                'lens_circle_falloff': '3.0',
+                'chromatic_aberration_intensity': '0.5',
+                'chromatic_aberration_offset': '0'}]]
         world = self._parent.get_world()
         bp_library = world.get_blueprint_library()
         for item in self.sensors:
@@ -1199,7 +1056,7 @@ class CameraManager(object):
             lidar_data = np.reshape(lidar_data, (-1, 2))
             lidar_img_size = (self.hud.dim[0], self.hud.dim[1], 3)
             lidar_img = np.zeros((lidar_img_size), dtype=np.uint8)
-            lidar_img[tuple(lidar_data.T)] = (155, 155, 5)
+            lidar_img[tuple(lidar_data.T)] = (255, 255, 255)
             self.surface = pygame.surfarray.make_surface(lidar_img)
         elif self.sensors[self.index][0].startswith('sensor.camera.dvs'):
             # Example of converting the raw_data from a carla.DVSEventArray
@@ -1224,14 +1081,12 @@ class CameraManager(object):
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
 # ==============================================================================
+
+
 def game_loop(args):
     pygame.init()
     pygame.font.init()
     world = None
-
-    before_time = time.time()
-    before_w = None
-    current_w = None
 
     try:
         client = carla.Client(args.host, args.port)
@@ -1243,220 +1098,16 @@ def game_loop(args):
 
         hud = HUD(args.width, args.height)
         world = World(client.get_world(), hud, args)
-        debug = client.get_world().debug
         controller = KeyboardControl(world, args.autopilot)
 
         clock = pygame.time.Clock()
-
-        map = world.world.get_map()
-        vehicle = world.player
-
-        tm = client.get_trafficmanager(8000)
-        tm.vehicle_percentage_speed_difference(world.player, 85.0)
-        tm.distance_to_leading_vehicle(world.player, 10)
-
-        current_w = map.get_waypoint(vehicle.get_location())
-        before_w = current_w
-        current_w = map.get_waypoint(vehicle.get_location())
         while True:
             clock.tick_busy_loop(60)
             if controller.parse_events(client, world, clock):
                 return
             world.tick(clock)
             world.render(display)
-
-            if vehicle.is_alive:
-                # location = vehicle.get_location()
-                # current_w = map.get_waypoint(location)
-                # print(
-                #     "X_coordinate: %s, " % location.x +
-                #     "Y_coordinate: %s, " % location.y +
-                #     "Z_coordinate: %s, " % location.z +
-                #     "Waypoint_ID: %s" % current_w.id)
-                # "x: %s, " % current_w.x +
-                # "y: %s, " % current_w.y +
-                # "z: %s, " & current_w.z)
-
-                potential_w_list = []
-                potential_w = map.get_waypoint(vehicle.get_location(),
-                                               lane_type=carla.LaneType.Driving | carla.LaneType.Shoulder | carla.LaneType.Sidewalk)
-                potential_w_list.append(potential_w)
-                # print('current: ', current_w)
-                # check for available right driving lanes
-                # if current_w.lane_change & carla.LaneChange.Right:
-                #
-                #     right_w = current_w.get_right_lane()
-                #     # print('right: ', right_w)
-                #     if right_w and right_w.lane_type == carla.LaneType.Driving:
-                #         potential_w_list.append(right_w)
-                #         # potential_w += list(right_w.next(waypoint_separation))
-                #
-                # # check for available left driving lanes
-                # if current_w.lane_change & carla.LaneChange.Left:
-                #
-                #     left_w = current_w.get_left_lane()
-                #     # print('left: ', left_w)
-                #     if left_w and left_w.lane_type == carla.LaneType.Driving:
-                #         potential_w_list.append(left_w)
-                #         # potential_w += list(left_w.next(waypoint_separation))
-
-                # choose a random waypoint to be the next
-                # chosen_w = random.choice(potential_w_list)
-                next_w = random.choice(potential_w_list)
-                # p = next_w.get_landmarks(potential_w, distance=10.0)
-                # print(p)
-                # next_w = random.choice(chosen_w.next(waypoint_separation))
-                # potential_w.remove(next_w)
-                # next_w = map.get_waypoint(vehicle.get_location(), lane_type=carla.LaneType.Driving | carla.LaneType.Shoulder | carla.LaneType.Sidewalk)
-                # Check if the vehicle is moving
-                if next_w.id != current_w.id:
-
-                    # if current_w.lane_change & carla.LaneChange.Right:
-                    #
-                    #     right_w = current_w.get_right_lane()
-                    #     # print('right: ', right_w)
-                    #     if right_w and right_w.lane_type == carla.LaneType.Driving:
-                    #         print('right')
-                    #         # potential_w_list.append(right_w)
-                    #         # potential_w += list(right_w.next(waypoint_separation))
-                    #
-                    #     # check for available left driving lanes
-                    # if current_w.lane_change & carla.LaneChange.Left:
-                    #
-                    #     left_w = current_w.get_left_lane()
-                    #     # print('left: ', left_w)
-                    #     if left_w and left_w.lane_type == carla.LaneType.Driving:
-                    #         print('left')
-                    #         # potential_w_list.append(left_w)
-                    #         # potential_w += list(left_w.next(waypoint_separation))
-
-                    if way_point == True:
-                        vector = vehicle.get_velocity()
-                        # Check if the vehicle is on a sidewalk
-                        if time.time() - before_time >= 6:
-                            location = vehicle.get_location()
-                            current_w = map.get_waypoint(location)
-                            previous_waypoint_x = current_w.transform.location.x
-                            previous_waypoint_y = current_w.transform.location.y
-                            previous_waypoint_z = current_w.transform.location.z
-                            print(
-                                "X_coordinate: %s, " % previous_waypoint_x +
-                                "Y_coordinate: %s, " % previous_waypoint_y +
-                                "Z_coordinate: %s, " % previous_waypoint_z +
-                                "Waypoint_ID: %s" % current_w.id)
-
-                            csv_repository = CsvCoordinateRepositoryImpl.getInstance()
-                            work_id = csv_repository.read_work_id()
-
-                            way_point_data.append([
-                                work_id,
-                                previous_waypoint_x,
-                                previous_waypoint_y,
-                                previous_waypoint_z,
-                                current_w.id,
-                                "Town01"
-                            ])
-
-                            # csv_repo = CsvCoordinateRepositoryImpl.getInstance()
-                            # csv_repo.saveCoordinateInCsv(
-                            #     work_id="1234",
-                            #     x_coordinate=previous_waypoint_x,
-                            #     y_coordinate=previous_waypoint_y,
-                            #     z_coordinate=previous_waypoint_z,
-                            #     wayPointId=current_w.id,
-                            #     townNumber="Town01"
-                            # )
-
-                            if current_w.lane_change & carla.LaneChange.Right:
-
-                                right_w = current_w.get_right_lane()
-                                # print('right: ', right_w)
-                                if right_w and right_w.lane_type == carla.LaneType.Driving:
-                                    potential_w_list.append(right_w)
-                                    # potential_w += list(right_w.next(waypoint_separation))
-
-                                # check for available left driving lanes
-                            if current_w.lane_change & carla.LaneChange.Left:
-
-                                left_w = current_w.get_left_lane()
-                                # print('left: ', left_w)
-                                if left_w and left_w.lane_type == carla.LaneType.Driving:
-                                    potential_w_list.append(left_w)
-                                    # potential_w += list(left_w.next(waypoint_separation))
-
-                                # choose a random waypoint to be the next
-                                # chosen_w = random.choice(potential_w_list)
-                            next_w = random.choice(potential_w_list)
-
-                            if next_w != potential_w:
-                                if current_w.lane_change & carla.LaneChange.Right:
-                                    tm.force_lane_change(vehicle, True)
-                                elif current_w.lane_change & carla.LaneChange.Left:
-                                    tm.force_lane_change(vehicle, False)
-
-                            if current_w.lane_type == carla.LaneType.Sidewalk:
-
-                                draw_waypoint_union(debug, before_w, current_w, cyan if current_w.is_junction else red, 60)
-                                # draw_waypoint_union(debug, current_w, next_w, red if current_w.is_junction else red, 60)
-                                draw_waypoint_union(debug, current_w, random.choice(next_w.next(waypoint_separation)),
-                                                    red if current_w.is_junction else red, 60)
-                            else:
-
-                                draw_waypoint_union(debug, before_w, current_w, cyan if current_w.is_junction else green,
-                                                    60)
-                                # draw_waypoint_union(debug, current_w, next_w, red if current_w.is_junction else red, 60)
-                                draw_waypoint_union(debug, current_w, random.choice(next_w.next(waypoint_separation)),
-                                                    red if current_w.is_junction else red, 60)
-                            # print(time.time())
-                            # print(next_w.next(waypoint_separation))
-                            debug.draw_string(current_w.transform.location, str('%15.0f km/h' % (
-                                        3.6 * math.sqrt(vector.x ** 2 + vector.y ** 2 + vector.z ** 2))), False, orange, 60)
-                            draw_transform(debug, current_w.transform, white, 60)
-
-                            before_time = time.time()
-                            before_w = current_w
-
-                # Update the current waypoint and sleep for some time
-                current_w = next_w
             pygame.display.flip()
-
-            # list of potential next waypoints
-            # potential_w = list(current_w.next(waypoint_separation))
-
-            # # check for available right driving lanes
-            # if current_w.lane_change & carla.LaneChange.Right:
-            #     right_w = current_w.get_right_lane()
-            #     if right_w and right_w.lane_type == carla.LaneType.Driving:
-            #         potential_w += list(right_w.next(waypoint_separation))
-            #
-            # # check for available left driving lanes
-            # if current_w.lane_change & carla.LaneChange.Left:
-            #     left_w = current_w.get_left_lane()
-            #     if left_w and left_w.lane_type == carla.LaneType.Driving:
-            #         potential_w += list(left_w.next(waypoint_separation))
-            #
-            # # choose a random waypoint to be the next
-            # next_w = random.choice(potential_w)
-            # potential_w.remove(next_w)
-            #
-            # # Render some nice information, notice that you can't see the strings if you are using an editor camera
-            # if args.info:
-            #     draw_waypoint_info(debug, current_w, trail_life_time)
-            # draw_waypoint_union(debug, current_w, next_w, cyan if current_w.is_junction else green, trail_life_time)
-            # draw_transform(debug, current_w.transform, white, trail_life_time)
-            #
-            # # print the remaining waypoints
-            # for p in potential_w:
-            #     draw_waypoint_union(debug, current_w, p, red, trail_life_time)
-            #     draw_transform(debug, p.transform, white, trail_life_time)
-            #
-            # # draw all junction waypoints and bounding box
-            # if next_w.is_junction:
-            #     junction = next_w.get_junction()
-            #     draw_junction(debug, junction, trail_life_time)
-            #
-            # # update the current waypoint and sleep for some time
-            # current_w = next_w
 
     finally:
 
@@ -1467,43 +1118,6 @@ def game_loop(args):
             world.destroy()
 
         pygame.quit()
-
-
-# def game_loop(args):
-#     pygame.init()
-#     pygame.font.init()
-#     world = None
-#
-#     try:
-#         client = carla.Client(args.host, args.port)
-#         client.set_timeout(2.0)
-#
-#         display = pygame.display.set_mode(
-#             (args.width, args.height),
-#             pygame.HWSURFACE | pygame.DOUBLEBUF)
-#
-#         hud = HUD(args.width, args.height)
-#         world = World(client.get_world(), hud, args)
-#         controller = KeyboardControl(world, args.autopilot)
-#
-#         clock = pygame.time.Clock()
-#         while True:
-#             clock.tick_busy_loop(60)
-#             if controller.parse_events(client, world, clock):
-#                 return
-#             world.tick(clock)
-#             world.render(display)
-#             pygame.display.flip()
-#
-#     finally:
-#
-#         if (world and world.recording_enabled):
-#             client.stop_recorder()
-#
-#         if world is not None:
-#             world.destroy()
-#
-#         pygame.quit()
 
 
 # ==============================================================================
@@ -1522,8 +1136,8 @@ def main():
     argparser.add_argument(
         '--host',
         metavar='H',
-        default='127.0.0.1',
-        help='IP of the host server (default: 127.0.0.1)')
+        default='192.168.20.37',
+        help='IP of the host server (default: 192.168.20.37)')
     argparser.add_argument(
         '-p', '--port',
         metavar='P',
@@ -1554,10 +1168,6 @@ def main():
         default=2.2,
         type=float,
         help='Gamma correction of the camera (default: 2.2)')
-    argparser.add_argument(
-        '-i', '--info',
-        action='store_true',
-        help='Show text information')
     args = argparser.parse_args()
 
     args.width, args.height = [int(x) for x in args.res.split('x')]
@@ -1578,4 +1188,5 @@ def main():
 
 
 if __name__ == '__main__':
+
     main()

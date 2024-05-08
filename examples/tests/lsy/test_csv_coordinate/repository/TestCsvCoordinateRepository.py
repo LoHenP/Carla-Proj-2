@@ -1,6 +1,8 @@
 import unittest
 import os
 import pandas as pd
+
+from csv_coordinate.repository.CsvCoordinateRepository import CsvCoordinateRepository
 from csv_coordinate.repository.CsvCoordinateRepositoryImpl import CsvCoordinateRepositoryImpl
 
 
@@ -16,7 +18,7 @@ class TestCsvCoordinateRepository(unittest.TestCase):
         waypoint_id = "1012345678"
         town_number = "Town03"
 
-        result = repository.save_coordinate_in_csv(work_id, x_coordinate, y_coordinate, z_coordinate, waypoint_id,
+        result = repository.saveCoordinateInCsv(work_id, x_coordinate, y_coordinate, z_coordinate, waypoint_id,
                                                 town_number)
 
         self.assertTrue(result)
@@ -24,9 +26,7 @@ class TestCsvCoordinateRepository(unittest.TestCase):
     def testReadCoordinate(self):
         repository = CsvCoordinateRepositoryImpl()
 
-        work_id = 3
-
-        result = repository.read_waypoint_data_from_csv(work_id)
+        result = repository.read_waypoint_data_from_csv()
 
         print("result: ", result)
 
@@ -58,3 +58,12 @@ class TestCsvCoordinateRepository(unittest.TestCase):
             print("town_number: ", town_number)
 
         self.assertIsNone(build_info)
+
+    def test_count_work_id(self):
+        repository = CsvCoordinateRepositoryImpl()
+
+        result = repository.count_work_id()
+
+        print("result: ", result)
+
+        self.assertTrue(result)
