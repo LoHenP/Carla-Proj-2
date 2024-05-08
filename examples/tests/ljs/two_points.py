@@ -1054,7 +1054,7 @@ class FrontSensor(object):
         world = self._parent.get_world()
         bp = world.get_blueprint_library().find('sensor.other.obstacle')
         bp.set_attribute('distance', '50')
-        bp.set_attribute('hit_radius', '2')
+        bp.set_attribute('hit_radius', '1')
         bp.set_attribute('only_dynamics', 'true')
         # bp.set_attribute('debug_linetrace', 'true')
         bp.set_attribute('sensor_tick', '0.5')
@@ -1071,16 +1071,16 @@ class FrontSensor(object):
             return
 
         if event.other_actor.type_id.startswith('vehicle.') or event.other_actor.type_id.startswith('walker.'):
-            if event.distance <= 5:
+            if event.distance <= 2:
                 v = event.other_actor.get_velocity()
                 a = event.other_actor.get_acceleration()
                 if (self._world.is_turning_right or self._world.is_turning_left) and (3.6 * math.sqrt(v.x ** 2 + v.y ** 2 + v.z ** 2)) < 1:
                     return
-                print('=========================================')
-                print(v)
-                print((3.6 * math.sqrt(v.x ** 2 + v.y ** 2 + v.z ** 2)))
-                print(a)
-                print(3.6 * math.sqrt(a.x ** 2 + a.y ** 2 + a.z ** 2))
+                # print('=========================================')
+                # print(v)
+                # print((3.6 * math.sqrt(v.x ** 2 + v.y ** 2 + v.z ** 2)))
+                # print(a)
+                # print(3.6 * math.sqrt(a.x ** 2 + a.y ** 2 + a.z ** 2))
 
                 # print('too close to obstacle!!!')
                 # self._parent.set_autopilot(False)
@@ -1217,9 +1217,9 @@ class LeftSensor(object):
         world = self._parent.get_world()
         bp = world.get_blueprint_library().find('sensor.other.obstacle')
         bp.set_attribute('distance', '5')
-        bp.set_attribute('hit_radius', '5')
+        bp.set_attribute('hit_radius', '2')
         bp.set_attribute('only_dynamics', 'true')
-        # bp.set_attribute('debug_linetrace', 'true')
+        bp.set_attribute('debug_linetrace', 'true')
         bp.set_attribute('sensor_tick', '0.5')
         self.sensor = world.spawn_actor(bp, self.sensor_transform, attach_to=self._parent)
         weak_self = weakref.ref(self)
